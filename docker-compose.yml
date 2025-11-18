@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # --- Application Dolibarr ---
+  dolibarr:
+    # Utilise le nom et le tag définis dans le fichier .env
+    image: ${IMAGE_NAME}:${IMAGE_TAG}
+    container_name: dolibarr-app
+    restart: unless-stopped
+    # Charge explicitement le fichier .env (sécurité et clarté)
+    env_file:
+      - .env
+    depends_on:
+      - dolibarr-db
+    environment:
+      # Mapping des variables .env vers les variables de l'image
+      - DOL_DB_HOST=${DB_HOST}
+      - DOL_DB_USER=${DB_USER}
+      - DOL_DB_PASSWORD=${DB_PASSWORD}
+      - DOL_DB_NAME=${DB_NAME}
+      - DOL_ADMIN_USERNAME=${DOL_ADMIN_USER}
+      - DOL_ADMIN_PASSWORD=${DOL_ADMIN_PASSWORD}
+     
+    volumes:
+      - dolibarr_docs:/var/www/documents
+      - dolibarr_conf:/var/www/html/conf
+    networks:
+      - frontend
+      - backend
+    ports:
+      - 8080:80
+
+  # --- Base de données MariaDB (Isolée) ---
+  dolibarr-db:
+    image: mariadb:10.11
+    container_name: dolibarr-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - dolibarr_db_data:/var/lib/mysql
+    networks:
+      - backend
+   
+
+  # --- Monitoring (Node Exporter) ---
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitoring
+    expose:
+      - 9100
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true # Réseau interne uniquement pour la DB
+  monitoring:
+    driver: bridge
+
+# Déclaration des volumes
+volumes:
+  dolibarr_docs:
+  dolibarr_conf:
+  dolibarr_db_data:
